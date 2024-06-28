@@ -1,0 +1,487 @@
+---
+title: "Predictive Value on Football Players using Linear Regression and Density-Based Clustering Algorithms"
+author: "Kelly Mae"
+class: "IS388D"
+date: "2021"
+output: openintro::lab_report
+---
+
+### LOAD LIBRARIES
+
+```{r, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#======== LOADING REQUIRED LIBRARIES ========
+
+#General Libraries
+library(tidyverse)
+library(dplyr)
+library(readxl)
+library(knitr) 
+library(ggplot2)
+
+#Linear Regression Libraries
+library(GGally)
+library(lmtest)
+library(car)
+library(nortest)
+library(Metrics)
+
+#Density-Based Clustering Libraries
+library(dbscan)
+library(gridExtra)
+library(ggpubr)
+library(caret)
+
+```
+
+### LINEAR REGRESSION
+## DATA EXPLORATION, DATA UNDERSTANDING, DATA FILTERING, AND DATA CLEANSING
+
+```{r}
+#======== DATA EXPLORATION AND UNDERSTANDING ========
+
+#Read Excel
+MyData <- read_excel("D1_KellyMae_51428.xlsx")
+
+#Observe Data Structure
+str(MyData)
+
+#Summarize Data
+summary(MyData$value_eur)
+
+#======== DATA FILTERING AND CLEANSING ========
+
+#Filter Data
+MyData$value[MyData$value_eur < 650000] <- "0"
+MyData$value[MyData$value_eur >= 650000] <- "1"
+
+#Change Data to Numeric
+MyData$value <- as.numeric(MyData$value)
+
+#Select Numerical Data
+numerical <- select_if(MyData, is.numeric)
+
+#Set new Variable for Value
+value <- MyData$value
+
+#Combine Numerical Data with Value
+numerical <- cbind(numerical, value)
+
+#Drop Data using Subset
+numerical <- subset(numerical, select = c(value, pace, shooting, passing, defending, physic, goalkeeping_handling))
+
+#Remove NA Value
+numdata <- na.omit(numerical)
+
+#Observe Data Structure After Data Cleansing
+str(numdata)
+
+```
+
+
+## DATA VISUALIZATION AND CORRELATION PLOT
+```{r}
+#======== DATA VISUALIZATION ========
+
+#Value Visualization Plot
+ggplot(numdata, aes(value)) +
+  labs(title = "Value Visualization Plot", x = "Value", y = "Frequency", 
+       subtitle = "by Kelly Mae 00000051428") +
+  geom_bar(aes(group = value), fill = "maroon4")
+
+#Value vs Pace Visualization Plot
+ggplot(numdata, aes(pace)) + 
+  labs(title = "Value vs Pace Visualization Plot", x = "Pace", y = "Frequency",
+       subtitle = "by Kelly Mae 00000051428") +
+  geom_bar(aes(group = value), fill = "orchid1") +
+  facet_wrap(~value)
+  
+#Value vs Shooting Visualization Plot
+ggplot(numdata, aes(shooting)) + 
+  labs(title = "Value vs Shooting Visualization Plot", x = "Shooting", y = "Frequency",
+       subtitle = "by Kelly Mae 00000051428") +
+  geom_bar(aes(group = value), fill = "plum4") +
+  facet_wrap(~value)
+
+#Value vs Passing Visualization Plot
+ggplot(numdata, aes(passing)) + 
+  labs(title = "Value vs Passing Visualization Plot", x = "Passing", y = "Frequency",
+       subtitle = "by Kelly Mae 00000051428") +
+  geom_bar(aes(group = value), fill = "steelblue2") +
+  facet_wrap(~value)
+
+#Value vs Defending Visualization Plot
+ggplot(numdata, aes(defending)) + 
+  labs(title = "Value vs Defending Visualization Plot", x = "Defending", y = "Frequency",
+       subtitle = "by Kelly Mae 00000051428") +
+  geom_bar(aes(group = value), fill = "skyblue3") +
+  facet_wrap(~value)
+
+#Value vs Physic Visualization Plot
+ggplot(numdata, aes(physic)) + 
+  labs(title = "Value vs Physic Visualization Plot", x = "Physic", y = "Frequency",
+       subtitle = "by Kelly Mae 00000051428") +
+  geom_bar(aes(group = value), fill = "lightsteelblue3") +
+  facet_wrap(~value)
+
+#Value vs Goalkeeping Handling Visualization Plot
+ggplot(numdata, aes(goalkeeping_handling)) + 
+  labs(title = "Value vs Goalkeeping Handling Visualization Plot", x = "Goalkeeping Handling", y = "Frequency",
+       subtitle = "by Kelly Mae 00000051428") +
+  geom_bar(aes(group = value), fill = "midnightblue") +
+  facet_wrap(~value)
+
+#======== CORRELATION PLOT ========
+
+#Change Data to Categorical
+val <- as.character(numdata$value)
+
+#Check Correlation through GGPairs
+ggpairs(numdata, aes(color = val),
+        upper = list(continuous = wrap("cor", size = 3.5))) + 
+  ggtitle("Correlation Plot of Football Players Value") + 
+  labs(subtitle = "by Kelly Mae 00000051428") 
+
+```
+
+
+## CORRELATION CHECKING
+```{r}
+#======== CHECKING CORRELATION BETWEEN VALUE AND OTHER PREDICTOR VARIABLES ========
+
+##Check Correlation
+#Correlation on Value and Pace
+cor(numdata$value, numdata$pace)
+#cor = 0.2377647.
+
+#Correlation on Value and Shooting
+cor(numdata$value, numdata$shooting)
+#cor = 0.3851966.
+
+#Correlation on Value and Passing
+cor(numdata$value, numdata$passing)
+#cor = 0.5305696.
+
+#Correlation on Value and Defending
+cor(numdata$value, numdata$defending)
+#cor = 0.2134661.
+
+#Correlation on Value and Physic
+cor(numdata$value, numdata$physic)
+#cor = 0.353405.
+
+#Correlation on Value and Goalkeeping Handling
+cor(numdata$value, numdata$goalkeeping_handling)
+#cor = 0.03773022.
+
+```
+
+
+## DATA SPLITTING
+
+```{r}
+#======== CREATING DATA TRAINING AND DATA TESTING (80:20) ========
+
+#Set Seed
+id <- 51428
+set.seed(id)
+
+#Split Data
+sampl <- sample(nrow(numdata), 0.8 * nrow(numdata), replace = FALSE)
+
+#Set Training and Testing Data
+training <- numdata[sampl,]
+testing <- numdata[-sampl,]
+
+#Determine Amount of Data Used
+nrow(MyData)
+#Overall Amount of Data = 18944.
+
+nrow(training)
+#Amount of Training Data = 13488.
+
+nrow(testing)
+#Amount of Testing Data = 3373.
+
+```
+
+
+## LINEAR REGRESSION MODEL IMPLEMENTATION AND IDENTIFICATION
+
+```{r}
+#======== IMPLEMENTING LINEAR REGRESSION MODEL ========
+
+#Model Creation
+(model <- lm(value ~ ., data = training))
+
+#Summarize Model
+summary(model)
+#Adjusted R^2: 0.3861.
+
+#======== IDENTIFICATING LINEAR REGRESSION MODEL ========
+
+#Regression Diagnostic Plots
+par(mfrow = c(2,3))
+plot(model, which = c(1:6))
+par(mfrow = c(1,1))
+
+#Durbin-Watson Test
+lmtest::dwtest(model)
+#p-value = 0.8253.
+
+#Check Multicollinearity
+car::vif(model)
+#pace = 1.264823.
+#shooting = 4.110562.
+#passing = 3.390139.
+#defending = 3.510749.
+#physic = 1.774768.
+#goalkeeping_handling = 1.004257.
+
+#Anderson-Darling Test
+ad.test(model$residuals)
+#p.value = < 2.2e-16.
+
+```
+
+### LINEAR REGRESSION MODEL DIAGNOSTIC CONCLUSION
+
+The regression diagnostic has been performed in 3 tests, such as Durbin-Watson Test, VIF (Variance Inflation Factors) Test, and Anderson-Darling Test. To begin with, p-value (0.8253) in Durbin-Watson Test is greater than alpha (0.05) which concludes that the data has no autocorrelation. Based on VIF Test, there is a moderate correlation between the predictor variables. In this case, there is no multicollinearity in the data (VIF < 5), although there are several values like shooting, passing, and defending are almost close to 5. Furthermore, according to Anderson-Darling Test, p-value is lesser than alpha (0.05) so the data residuals are not normally distributed.
+
+
+## LINEAR REGRESSION MODEL PREDICTION
+```{r}
+#======== PREDICTING LINEAR REGRESSION MODEL ========
+
+#Predicting Model using Testing Data
+(prediction <- predict(model, data = testing.pace + testing.shooting + testing.passing +
+                         testing.defensing + testing.physic + testing$goalkeeping_handling))
+
+#Taking 5 First Objects from Prediction Model
+prediction[1:5]
+
+#Model Prediction using RMSE
+rmse(testing$value, prediction)
+#RMSE Value = 0.5907667.
+
+```
+
+
+### CONCLUSION FOR LINEAR REGRESSION ALGORITHM
+
+Based on linear regression algorithm implementation that has been done, the model shows that the Adjusted R-Squared has reached 0.3861 (0.39) and the RMSE (Root-Mean-Square Error) value is 0.5907667 (0.59). In this case, a linear regression model can be considered good if the Adjusted R-Squared is near to 1 and has lower RMSE value. As the result, this model is not acceptable to be used for further research because of the low Adjusted R-squared which is 0.38, in spite of good RMSE value.
+
+
+### DENSITY-BASED CLUSTERING
+## DATA EXPLORATION, DATA UNDERSTANDING, AND DATA CLEANSING
+
+```{r}
+#======== DATA EXPLORATION AND UNDERSTANDING ========
+
+#Observe Data Structure
+str(MyData)
+
+#Summarize Data
+summary(MyData$value_eur)
+
+#======== DATA CLEANSING ========
+
+#Select Numerical Data
+numerical2 <- select_if(MyData, is.numeric)
+
+#Drop Data using Subset
+numerical2 <- subset(numerical2, select = c(value, pace, shooting, passing, dribbling, defending, physic))
+
+#Remove NA Value
+numdata2 <- na.omit(numerical2)
+
+#Drop Dataset Rows
+numdata2 <- numdata2[-c(2001:18944),]
+nrow(numdata2)
+
+#Observe Data Structure After Data Cleansing
+str(numdata2)
+
+```
+
+## DENSITY-BASED CLUSTERING DATA EXAMINING
+```{r}
+#======== DATA EXAMINING USING WILCOXON SIGNED-RANK TEST ========
+
+#Wilcoxon Test on Value and Pace
+wilcox.test(numdata2$pace, numdata2$value, paired = TRUE) 
+#p.value = < 2.2e-16.
+
+#Wilcoxon Test on Value and Shooting
+wilcox.test(numdata2$shooting, numdata2$value, paired = TRUE)
+#p.value = < 2.2e-16.
+
+#Wilcoxon Test on Value and Passing
+wilcox.test(numdata2$passing, numdata2$value, paired = TRUE)
+#p.value = < 2.2e-16.
+
+#Wilcoxon Test on Value and Dribbling
+wilcox.test(numdata2$dribbling, numdata2$value, paired = TRUE)
+#p.value = < 2.2e-16.
+
+#Wilcoxon Test on Value and Defending
+wilcox.test(numdata2$defending, numdata2$value, paired = TRUE)
+#p.value = < 2.2e-16.
+
+#Wilcoxon Test on Value and Physic
+wilcox.test(numdata2$physic, numdata2$value, paired = TRUE)
+#p.value = < 2.2e-16.
+
+```
+
+### DENSITY-BASED CLUSTERING DATA EXAMINING CONCLUSION
+The Wilcoxon Signed-Rank Tests with contuinity correction shows that, it can be concluded that there are significant differences between value as the response variable with predictor variables. Moreover, the relationships between the response and predictor variables can be considered strong if p-value is greater than alpha (0.05).
+
+
+## DATA SPLITTING
+
+```{r}
+#======== CREATING DATA TRAINING AND DATA TESTING (80:20) ========
+
+#Set Seed
+id <- 51428
+set.seed(id)
+
+#Split Data
+sampl2 <- sample(nrow(numdata2), 0.8 * nrow(numdata2), replace = FALSE)
+
+#Set Training and Testing Data
+training2 <- numdata2[sampl2,]
+testing2 <- numdata2[-sampl2,]
+
+#Determine Amount of Data Used
+nrow(numdata2)
+#Overall Amount of Data = 2000.
+
+nrow(training2)
+#Amount of Training Data = 1600.
+
+nrow(testing2)
+#Amount of Testing Data = 400.
+
+```
+
+
+## DENSITY-BASED CLUSTERING MODEL IMPLEMENTATION, IDENTIFICATION, AND VISUALIZATION
+
+```{r}
+#======== IMPLEMENTING DENSITY-BASED CLUSTERING ALGORITHM ========
+
+#Find and Calculate Suitable Epsilon
+dbscan::kNNdistplot(training2, k = 4)
+epsilon <- 11
+abline(h = epsilon, lty = 2)
+title("K-Nearest Neighbor Distances")
+
+#Perform DBScan
+db <- dbscan::dbscan(training2, eps = epsilon, MinPts = 5)
+print(db)
+
+#======== IDENTIFICATING DENSITY-BASED CLUSTERING MODEL ========
+
+#Indicate Outliers and Create Boxplot using Training Data
+#Outliers at Value vs Pace
+outlier1 <- boxplot(pace ~ value, data = training2, plot = FALSE)$out
+print(outlier1)
+
+ggplot(data = training2, aes(x = value, y = pace)) +
+  geom_boxplot(aes(group = value), fill = "orchid1") + ggtitle("Boxplot Value vs Pace") + 
+  labs(subtitle = "by Kelly Mae 00000051428")
+
+#Outliers at Value vs Shooting
+outlier2 <- boxplot(shooting ~ value, data = training2, plot = FALSE)$out
+print(outlier2)
+
+ggplot(data = training2, aes(x = value, y = shooting)) +
+  geom_boxplot(aes(group = value), fill = "plum4") + ggtitle("Boxplot Value vs Shooting") + 
+  labs(subtitle = "by Kelly Mae 00000051428")
+
+#Outliers at Value vs Passing
+outlier3 <- boxplot(passing ~ value, data = training2, plot = FALSE)$out
+print(outlier3)
+
+ggplot(data = training2, aes(x = value, y = passing)) +
+  geom_boxplot(aes(group = value), fill = "steelblue2") + ggtitle("Boxplot Value vs Passing") + 
+  labs(subtitle = "by Kelly Mae 00000051428")
+
+#Outliers at Value vs Dribbling
+outlier4 <- boxplot(dribbling ~ value, data = training2, plot = FALSE)$out
+print(outlier4)
+
+ggplot(data = training2, aes(x = value, y = dribbling)) +
+  geom_boxplot(aes(group = value), fill = "skyblue3") + ggtitle("Boxplot Value vs Dribbling") + 
+  labs(subtitle = "by Kelly Mae 00000051428")
+
+#Outliers at Value vs Defending
+outlier5 <- boxplot(defending ~ value, data = training2, plot = FALSE)$out
+print(outlier5)
+
+ggplot(data = training2, aes(x = value, y = defending)) +
+  geom_boxplot(aes(group = value), fill = "lightsteelblue3") + ggtitle("Boxplot Value vs Defending") + 
+  labs(subtitle = "by Kelly Mae 00000051428")
+
+#Outliers at Value vs Physic
+outlier6 <- boxplot(physic ~ value, data = training2, plot = FALSE)$out
+print(outlier6)
+
+ggplot(data = training2, aes(x = value, y = physic)) +
+  geom_boxplot(aes(group = value), fill = "midnightblue") + ggtitle("Boxplot Value vs Physic") + 
+  labs(subtitle = "by Kelly Mae 00000051428")
+
+#======== VISUALIZING DENSITY-BASED CLUSTERING MODEL ========
+
+#Visualize Cluster and Show Overall Outliers through Scatter Plot
+factoextra::fviz_cluster(db, data = training2, show.clust.cent = TRUE, 
+                         geom = "point", palette = "jo", ggtheme = theme_classic()) +
+   ggtitle("Scatter Plot of Density-Based Clustering") +
+   labs(subtitle = "The Black Points in Cluster Plot Represent Outliers", 
+        caption = "Kelly Mae 00000051428")
+
+```
+
+
+## DENSITY-BASED CLUSTERING MODEL PREDICTION
+
+```{r}
+#======== PREDICTING DENSITY-BASED CLUSTERING MODEL ========
+
+#Create a New Data Frame using Testing Data
+newData <- data.frame(db$cluster, testing2$value)
+
+#Subset Data
+newData <- subset(newData, db$cluster != 0)
+
+#Determine Cluster and Value
+dbased <- ifelse(newData$db.cluster == 1, 0, 1)
+fixValue <- ifelse(newData$testing2.value >= 1, 0, 1)
+
+#Change Data into As.Factor
+#Clustering Data
+dbased <- as.factor(dbased)
+
+#Testing Data
+fixValue <- as.factor(fixValue)
+
+#Check Data Structures
+#Clustering Data
+str(dbased)
+
+#Value Data
+str(fixValue)
+
+#======== Confusion Matrix ========
+
+#Confusion Matrix
+confusionMatrix(dbased, fixValue)
+#Accuracy = 0.9739.
+
+```
+
+### CONCLUSION FOR DENSITY-BASED CLUSTERING ALGORITHM
+The Density-Based Clustering algorithm model has higher accuracy that reaches 97% (0.9739). As a result, the Density-Based Clustering algorithm is acceptable to be predicted in upcoming time.
+
